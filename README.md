@@ -36,6 +36,8 @@ In the desktop app, where `/plugin` does not run: click + next to the prompt box
 
 The scene redraws only when one of these bands changes.
 
+The aurora moves only while Claude works: when a turn ends it holds still where it stands, and it moves again when the next turn starts, which keeps the machine quiet while you read. Only a storm's pulsing horizon keeps moving while Claude is idle, as a warning. The "Backdrop motion" setting set to `always` keeps it moving all the time.
+
 ## The band above the prompt (desktop and mobile)
 
 One SVG strip, 860 × 96, light and dark:
@@ -58,7 +60,7 @@ Ask Claude to change the pet (the `aurora-flow:pixel-pet` skill): "make the pet 
 
 ## Settings
 
-As pixel-pet's: speed (`slow`, `normal`, `fast`), sleep after (seconds), HUD on or off, status line on or off, naming files and commands on or off, subagent minis on or off.
+As pixel-pet's: speed (`slow`, `normal`, `fast`), sleep after (seconds), HUD on or off, status line on or off, naming files and commands on or off, subagent minis on or off. And backdrop motion: `while working` (the default) or `always`.
 
 ## What it touches
 

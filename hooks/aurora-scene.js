@@ -45,7 +45,7 @@ export const AURORA = {
   ],
 }
 
-export function buildScene(state) {
+export function buildScene(state, moving = true) {
   const { contextBand: cb, effortLevel: el, focusStage: fs, stars } = sceneBands(state)
   const r = rng(2026)
   const speed = 1 + el * 0.45 // effort → energy
@@ -163,6 +163,7 @@ ${[0, 1, 2, 3, 4, 5].map(k => `.d${k}{animation-delay:-${n1(k * 7 / speed / 6)}s
 .pt{fill:var(--a0);animation:pt ${D(7)} linear infinite}.p1{fill:var(--a1)}.p2{fill:var(--a2)}.p3{fill:#fff}
 @keyframes pt{0%{transform:translateY(0);opacity:0}15%{opacity:.9}100%{transform:translateY(-420px);opacity:0}}
 .vg{opacity:${vig}}.v0{stop-color:var(--vig);stop-opacity:0}.v1{stop-color:var(--vig)}
+${moving ? '' : '*:not(.hz){animation-play-state:paused!important}'}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}`
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" width="100%" height="100%"><style>${style}</style><defs>`
@@ -187,12 +188,15 @@ ${[0, 1, 2, 3, 4, 5].map(k => `.d${k}{animation-delay:-${n1(k * 7 / speed / 6)}s
     + `</svg>`
 }
 
-/** The scene for a set of bands: what the backdrop redraws from. */
-export function sceneFromBands(bands) {
+/**
+ * The scene for a set of bands: what the backdrop redraws from. `moving` false holds every motion still where it
+ * stands, all but the storm's pulsing horizon, a warning worth seeing while Claude is idle.
+ */
+export function sceneFromBands(bands, moving = true) {
   return buildScene({
     context: [10, 50, 75, 90][bands.contextBand] ?? 10,
     effort: EFFORTS[bands.effortLevel] ?? 'medium',
     focusMin: [0, 15, 30, 45][bands.focusStage] ?? 0,
     sessionsToday: bands.stars,
-  })
+  }, moving)
 }

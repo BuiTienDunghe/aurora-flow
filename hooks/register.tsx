@@ -69,6 +69,8 @@ const bands = atom({ plugin: 'aurora-flow', key: 'bands' } as const, FIRST_BANDS
 const flow = atom({ plugin: 'aurora-flow', key: 'flow' } as const, { start: 0, lastActive: 0 } as Flow)
 const isHudHidden = atom({ plugin: 'aurora-flow', key: 'isHudHidden' } as const, false)
 const isPetOff = atom({ plugin: 'aurora-flow', key: 'isPetOff' } as const, false)
+// Whether the backdrop moves: while Claude works, unless the backdropMotion setting says always.
+const isMoving = atom({ plugin: 'aurora-flow', key: 'isMoving' } as const, false)
 const anim = atom({ plugin: 'aurora-flow', key: 'anim' } as const, {
   mode: 'idle',
   since: 0,
@@ -384,6 +386,11 @@ export const register: Register = (on, options) => {
       if (beat % FOCUS_EVERY_BEATS === 0) {
         await refreshFocus($)
       }
+      // The backdrop moves while a turn runs, as the prompt box's band last said; the pet being off changes nothing.
+      if (settings.motion === 'working' && (await read($, isMoving)) !== isWorking) {
+        const moving = isWorking
+        await update($, isMoving, () => moving)
+      }
       const off = beat % PET_EVERY_BEATS === 0 ? await syncPetOff($) : await read($, isPetOff)
       // A hidden pet costs nothing: no agent polling, no steps, no redraws. The backdrop's figures above still run.
       if (off || (await read($, isHudHidden))) {
@@ -537,13 +544,14 @@ export const register: Register = (on, options) => {
     if ((e.surface !== 'desktop' && e.surface !== 'mobile') || e.props.scene !== SCENE_NAME) {
       return next(e)
     }
-    // Reads the bands alone, so the scene redraws only when one changes.
+    // Reads the bands, and whether a turn runs, alone: the scene redraws only when one of them changes.
     const b = await read($, bands)
+    const moving = settings.motion === 'always' || (await read($, isMoving))
     const { Svg } = $.ui.resolve(e)
 
     return (
       <Svg
-        source={sceneFromBands(b)}
+        source={sceneFromBands(b, moving)}
         alt="Aurora curtains over a glowing tech horizon, colored by how full the context is"
         isInteractive
       />
@@ -594,11 +602,12 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     try {
+      // Read first: the backdrop's motion follows isWorking even while the band is hidden.
+      isWorking = e.props.isWorking
+      bodyColumns = e.props.bodyColumns
       if (e.props.hasSurvey || (await read($, isHudHidden)) || (await read($, isPetOff))) {
         return next(e)
       }
-      isWorking = e.props.isWorking
-      bodyColumns = e.props.bodyColumns
 
       if (!body) {
         body = await keptBody($)

@@ -66,6 +66,6 @@ export type Leap = { since: number; from: number; to: number }
 
 declare module 'claude-code' {
   interface PluginState {
-    'aurora-flow': { hud: Hud; bands: Bands; flow: Flow; isHudHidden: boolean; isPetOff: boolean; anim: Anim }
+    'aurora-flow': { hud: Hud; bands: Bands; flow: Flow; isHudHidden: boolean; isPetOff: boolean; isMoving: boolean; anim: Anim }
   }
 }

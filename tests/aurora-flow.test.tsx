@@ -127,6 +127,7 @@ test('a context past 85% storms the aurora and the HUD calls for /compact', asyn
 
   const after = await strip(() => $.ui.mount({ ...BACKDROP, surface: 'desktop' }))
   expect(after).toContain('@keyframes st{')
+  expect(after).toContain('*:not(.hz){animation-play-state:paused') // idle: all still but the storm's horizon
   expect(after.length < 131072).toBe(true)
   expect(after).not.toContain('style="')
 
@@ -230,6 +231,36 @@ test('a session started while the pet is off starts with it off, and its tick do
   pet.file = 'on\n'
   await clock.advance(3_000)
   expect(pet.agentLooks > 0).toBe(true)
+})
+
+const PAUSED = 'animation-play-state:paused'
+
+test('the backdrop stands still while Claude is idle and moves while it works', async ($, on) => {
+  const { clock } = engine(on)
+  await $.session.start(DESK)
+  expect(await strip(() => $.ui.mount({ ...BACKDROP, surface: 'desktop' }))).toContain(PAUSED)
+
+  const busy = await $.ui.mount({ ...BAND, surface: 'desktop', props: { ...BAND.props, isWorking: true } })
+  await busy.unmount()
+  await clock.advance(200)
+  expect(await strip(() => $.ui.mount({ ...BACKDROP, surface: 'desktop' }))).not.toContain(PAUSED)
+
+  const done = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  await done.unmount()
+  await clock.advance(200)
+  expect(await strip(() => $.ui.mount({ ...BACKDROP, surface: 'desktop' }))).toContain(PAUSED)
+})
+
+test('with the pet off everywhere, the backdrop still moves while Claude works', async ($, on) => {
+  const { clock, pet } = engine(on)
+  pet.file = 'off\n'
+  await $.session.start(DESK)
+
+  const busy = await $.ui.mount({ ...BAND, surface: 'desktop', props: { ...BAND.props, isWorking: true } })
+  expect(await busy.find({ type: 'Svg' })).toBeUndefined() // no strip
+  await busy.unmount()
+  await clock.advance(200)
+  expect(await strip(() => $.ui.mount({ ...BACKDROP, surface: 'desktop' }))).not.toContain(PAUSED)
 })
 
 test('/aurora hides the strip and brings it back', async ($, on) => {

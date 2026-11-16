@@ -15,11 +15,11 @@ export type SceneState = {
 /** The bands a state falls in: the scene redraws only when one changes. */
 export declare function sceneBands(state: SceneState): Bands
 
-/** The backdrop SVG for a state: both modes in one, under 131,072 characters. */
-export declare function buildScene(state: SceneState): string
+/** The backdrop SVG for a state: both modes in one, under 131,072 characters. `moving` false holds it still. */
+export declare function buildScene(state: SceneState, moving?: boolean): string
 
-/** The backdrop SVG for a set of bands. */
-export declare function sceneFromBands(bands: Bands): string
+/** The backdrop SVG for a set of bands; `moving` false holds it still, all but a storm's pulsing horizon. */
+export declare function sceneFromBands(bands: Bands, moving?: boolean): string
 
 /** Aurora colors per mode and context band: [low curtain, mid curtain, crown]. */
 export declare const AURORA: { dark: string[][]; light: string[][] }
