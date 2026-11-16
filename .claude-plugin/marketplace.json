@@ -1,0 +1,5 @@
+{
+  "name": "aurora-flow",
+  "owner": { "name": "BuiTienDunghe" },
+  "plugins": [{ "name": "aurora-flow", "source": "./" }]
+}
