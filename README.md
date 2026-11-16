@@ -52,7 +52,9 @@ On the terminal the band is pixel-pet's own text-cell band, and the HUD is its w
 
 Ask Claude to change the pet (the `aurora-flow:pixel-pet` skill): "make the pet a rubber duck", "a UFO tablet when it reads", "a moon surface with rocks to jump over". Claude previews the theme in your browser first, then sets it with the mod's `set_theme` tool; the theme is kept for later sessions. `assets/duck.json` and `assets/alien.json` are examples; `skills/pixel-pet/FORMAT.md` documents the format.
 
-`/aurora` hides or shows the band and prints the session's figures.
+`/aurora` hides or shows the band in this session and prints the session's figures.
+
+`/pet-off` turns the pet and HUD off in every session: the ones open now hide within two seconds, and new ones start with it off. A hidden pet costs nothing: the mod stops stepping and drawing it. `/pet-on` turns it back on everywhere. The aurora behind the chat stays either way. The switch is kept in a `.pet-state` file in the mod's folder.
 
 ## Settings
 

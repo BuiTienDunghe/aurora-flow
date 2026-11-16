@@ -45,6 +45,8 @@ function engine(on: On) {
   const looks: ThemeSetArgs[] = []
   const commands: string[] = []
   const state = { percent: undefined as number | undefined }
+  // The shared file /pet-off and /pet-on write beside the mod, as every open session would read it from disk.
+  const pet = { file: '', writes: [] as string[], agentLooks: 0 }
 
   on('theme.set', (_, e) => {
     looks.push(e)
@@ -58,8 +60,18 @@ function engine(on: On) {
   on('session.usage', () => ({ value: usage(state.percent) }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('prompt.submit', (_, e) => ({ text: e.text }))
-  on('agent.list', () => ({ value: [] }))
-  on('fs.read', () => ({ value: JSON.stringify(SLIME) }))
+  on('agent.list', () => {
+    pet.agentLooks += 1
+    return { value: [] }
+  })
+  on('fs.read', (_, e) => ({ value: e.path.endsWith('.pet-state') ? pet.file : JSON.stringify(SLIME) }))
+  on('fs.write', (_, e) => {
+    if (e.path.endsWith('.pet-state')) {
+      pet.file = e.text
+      pet.writes.push(e.text)
+    }
+    return { value: undefined }
+  })
   on('ui.status', () => ({ value: undefined }))
   on('ui.toast', () => ({ value: undefined }))
   // the engine's own drawing, beneath the mod
@@ -68,7 +80,7 @@ function engine(on: On) {
     return <Text>engine</Text>
   })
 
-  return { clock, looks, commands, state }
+  return { clock, looks, commands, state, pet }
 }
 
 const DESK = { cwd: '/', surface: 'desktop', isInteractive: true } as const
@@ -164,6 +176,60 @@ test('the terminal keeps the pet’s text-cell band and HUD window; another plug
   expect(await other.find({ type: 'Svg' })).toBeUndefined()
   expect((await other.find({ type: 'Text' }))?.text).toBe('engine')
   await other.unmount()
+})
+
+async function hasStrip(mount: () => Promise<{ find: (q: { type: string }) => Promise<unknown>; unmount: () => Promise<void> }>) {
+  const ui = await mount()
+  const found = (await ui.find({ type: 'Svg' })) !== undefined
+  await ui.unmount()
+  return found
+}
+
+test('/pet-off turns the pet off in every session through the shared file, and /pet-on turns it back on', async ($, on) => {
+  const { commands, pet } = engine(on)
+  await $.session.start(DESK)
+  expect(commands).toContain('pet-off')
+  expect(commands).toContain('pet-on')
+
+  const off = await $.command.run({ command: 'pet-off', args: '' } as never)
+  expect(String((off as { text?: string }).text)).toContain('mọi phiên')
+  expect(pet.writes).toEqual(['off\n'])
+  expect(await hasStrip(() => $.ui.mount({ ...BAND, surface: 'desktop' }))).toBe(false)
+
+  const aurora = await $.command.run({ command: 'aurora', args: '' } as never)
+  expect(String((aurora as { text?: string }).text)).toContain('/pet-on')
+
+  await $.command.run({ command: 'pet-on', args: '' } as never)
+  expect(pet.writes).toEqual(['off\n', 'on\n'])
+  expect(await hasStrip(() => $.ui.mount({ ...BAND, surface: 'desktop' }))).toBe(true)
+})
+
+test('a session already open follows another session’s switch within two seconds', async ($, on) => {
+  const { clock, pet } = engine(on)
+  await $.session.start(DESK)
+  expect(await hasStrip(() => $.ui.mount({ ...BAND, surface: 'desktop' }))).toBe(true)
+
+  pet.file = 'off\n' // another session ran /pet-off
+  await clock.advance(2_500)
+  expect(await hasStrip(() => $.ui.mount({ ...BAND, surface: 'desktop' }))).toBe(false)
+
+  pet.file = 'on\n' // and then /pet-on
+  await clock.advance(2_500)
+  expect(await hasStrip(() => $.ui.mount({ ...BAND, surface: 'desktop' }))).toBe(true)
+})
+
+test('a session started while the pet is off starts with it off, and its tick does no pet work', async ($, on) => {
+  const { clock, pet } = engine(on)
+  pet.file = 'off\n'
+  await $.session.start(DESK)
+  expect(await hasStrip(() => $.ui.mount({ ...BAND, surface: 'desktop' }))).toBe(false)
+
+  await clock.advance(1_000) // ten ticks: a pet that is on looks for subagents twice in them
+  expect(pet.agentLooks).toBe(0)
+
+  pet.file = 'on\n'
+  await clock.advance(3_000)
+  expect(pet.agentLooks > 0).toBe(true)
 })
 
 test('/aurora hides the strip and brings it back', async ($, on) => {

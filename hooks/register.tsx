@@ -43,6 +43,10 @@ const FOCUS_EVERY_BEATS = 300 // 30 s
 const SLOW_BEATS: Partial<Record<Mode, number>> = { idle: 2, sleep: 4 } // ticks per redraw while nothing moves fast
 
 const THEME_KEY = 'theme' // in $.store: the pet theme set_theme last took
+// /pet-off and /pet-on write this file beside the mod: `off` hides the pet in every session. A file, read from disk
+// each time, so a session already open sees another session's switch; every PET_EVERY_BEATS it looks again.
+const PET_FILE = '.pet-state'
+const PET_EVERY_BEATS = 20 // 2 s
 const OWN_TOOLS = 'mcp__aurora-flow__'
 // Literals, so `claude plugin validate` can read the hooks' matchers.
 const SET_THEME = 'mcp__aurora-flow__set_theme'
@@ -64,6 +68,7 @@ const hud = atom({ plugin: 'aurora-flow', key: 'hud' } as const, EMPTY_HUD)
 const bands = atom({ plugin: 'aurora-flow', key: 'bands' } as const, FIRST_BANDS)
 const flow = atom({ plugin: 'aurora-flow', key: 'flow' } as const, { start: 0, lastActive: 0 } as Flow)
 const isHudHidden = atom({ plugin: 'aurora-flow', key: 'isHudHidden' } as const, false)
+const isPetOff = atom({ plugin: 'aurora-flow', key: 'isPetOff' } as const, false)
 const anim = atom({ plugin: 'aurora-flow', key: 'anim' } as const, {
   mode: 'idle',
   since: 0,
@@ -202,6 +207,42 @@ async function countSession($: EngineInterface): Promise<number> {
 
 // ── the pet ──
 
+/** Whether /pet-off, from any session, has the pet off: the shared file says `off`. No file, or none readable, is on. */
+async function petOffOnDisk($: EngineInterface): Promise<boolean> {
+  try {
+    return (await $.fs.read(`${$.plugin.root}/${PET_FILE}`)).trim() === 'off'
+  } catch {
+    return false
+  }
+}
+
+/** Brings this session's isPetOff in line with the shared file; returns it. */
+async function syncPetOff($: EngineInterface): Promise<boolean> {
+  const off = await petOffOnDisk($)
+  if ((await read($, isPetOff)) !== off) {
+    await update($, isPetOff, () => off)
+  }
+
+  return off
+}
+
+/** /pet-off and /pet-on: the shared file for every session, and this one at once. */
+async function switchPet($: EngineInterface, off: boolean): Promise<string> {
+  try {
+    await $.fs.write(`${$.plugin.root}/${PET_FILE}`, off ? 'off\n' : 'on\n')
+  } catch (err) {
+    return `Không ghi được trạng thái pet chung (${err instanceof Error ? err.message : String(err)}), nên chỉ phiên này ${off ? 'tắt' : 'bật'} pet.`
+  }
+  await update($, isPetOff, () => off)
+  if (!off) {
+    await update($, isHudHidden, () => false)
+  }
+
+  return off
+    ? 'Đã tắt pet và HUD ở mọi phiên. Các phiên đang mở ẩn trong vòng 2 giây, phiên mới mở cũng tắt sẵn. Nền cực quang vẫn chạy. Gõ /pet-on để bật lại.'
+    : 'Đã bật pet và HUD ở mọi phiên. Các phiên đang mở hiện lại trong vòng 2 giây. Gõ /pet-off để tắt.'
+}
+
 /** The minis after a fresh look at the session's agents, or `last` when the list call fails. */
 async function minisOr($: EngineInterface, now: number, last: Mini[]) {
   try {
@@ -294,8 +335,11 @@ export const register: Register = (on, options) => {
     }
     await $.command.register({
       name: 'aurora',
-      description: 'Aurora Flow: show or hide the pet and HUD band, and read this session’s figures',
+      description: 'Aurora Flow: show or hide the pet and HUD band in this session, and read its figures',
     })
+    await $.command.register({ name: 'pet-off', description: 'Aurora Flow: turn the pet and HUD off in every session' })
+    await $.command.register({ name: 'pet-on', description: 'Aurora Flow: turn the pet and HUD back on in every session' })
+    await syncPetOff($)
     try {
       await $.tool.register({
         name: 'preview_theme',
@@ -339,6 +383,11 @@ export const register: Register = (on, options) => {
       }
       if (beat % FOCUS_EVERY_BEATS === 0) {
         await refreshFocus($)
+      }
+      const off = beat % PET_EVERY_BEATS === 0 ? await syncPetOff($) : await read($, isPetOff)
+      // A hidden pet costs nothing: no agent polling, no steps, no redraws. The backdrop's figures above still run.
+      if (off || (await read($, isHudHidden))) {
+        return
       }
       if (settings.minis && beat % AGENTS_EVERY_BEATS === 0) {
         minis = await minisOr($, t, minis)
@@ -394,11 +443,17 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'aurora' }, async $ => {
-    const hidden = await update($, isHudHidden, v => !v)
     const cur = await read($, hud)
+    if (await syncPetOff($)) {
+      return { text: `Pet đang tắt ở mọi phiên (/pet-off). Gõ /pet-on để bật lại. ${hudLine(cur)}` }
+    }
+    const hidden = await update($, isHudHidden, v => !v)
 
-    return { text: `${hidden ? 'Đã ẩn' : 'Đã hiện'} pet và HUD của Aurora Flow. ${hudLine(cur)}` }
+    return { text: `${hidden ? 'Đã ẩn' : 'Đã hiện'} pet và HUD của Aurora Flow trong phiên này. ${hudLine(cur)}` }
   })
+
+  on('command.run', { command: 'pet-off' }, async $ => ({ text: await switchPet($, true) }))
+  on('command.run', { command: 'pet-on' }, async $ => ({ text: await switchPet($, false) }))
 
   // ── the pet's tools, and what tool calls make it do ──
 
@@ -497,7 +552,7 @@ export const register: Register = (on, options) => {
 
   // The terminal's HUD window below the prompt, as pixel-pet draws it.
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
-    if (!settings.hud || !petHud || e.surface !== 'terminal' || (await read($, isHudHidden))) {
+    if (!settings.hud || !petHud || e.surface !== 'terminal' || (await read($, isHudHidden)) || (await read($, isPetOff))) {
       return next(e)
     }
     if (!body) {
@@ -539,7 +594,7 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     try {
-      if (e.props.hasSurvey || (await read($, isHudHidden))) {
+      if (e.props.hasSurvey || (await read($, isHudHidden)) || (await read($, isPetOff))) {
         return next(e)
       }
       isWorking = e.props.isWorking

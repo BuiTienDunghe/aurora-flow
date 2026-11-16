@@ -1,6 +1,6 @@
 {
   "name": "aurora-flow",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Aurora Flow: a live aurora behind the chat that answers the session (context, effort, focus time, sessions today), and above the prompt a pixel pet that acts out each tool call beside a pixel HUD (HP, MP, ST, effort, flow). Built for the Claude Desktop app; the pet comes from pixel-pet by halluqinate (MIT).",
   "license": "MIT",
   "types": "./types/index.d.ts",
